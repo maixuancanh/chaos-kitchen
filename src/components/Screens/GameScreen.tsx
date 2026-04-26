@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
+
+type MobileTab = "orders" | "kitchen" | "staff";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "@/store/gameStore";
 import KitchenScene from "@/components/Kitchen/KitchenScene";
@@ -19,7 +21,7 @@ const MAX_ACTIVE_ORDERS = 5;
 const SPAWN_INTERVAL_MS = 5_000;
 const DONE_ORDER_LINGER_MS = 3_000;
 const GAME_OVER_CHAOS = 100;
-const VICTORY_ORDERS = 15; // Complete 15 orders to win
+const VICTORY_ORDERS = 15;
 
 export default function GameScreen() {
   const phase = useGameStore((s) => s.phase);
@@ -44,6 +46,7 @@ export default function GameScreen() {
   const [endgamePending, setEndgamePending] = useState<
     "game-over" | "victory" | null
   >(null);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("staff");
 
   // Function that performs the actual phase transition.
   const doTransition = useCallback(
@@ -219,26 +222,20 @@ export default function GameScreen() {
       <ChaosOverlay chaosLevel={chaosLevel} />
 
       {/* ── Top HUD ── */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-orange-900 bg-kitchen-surface/80 backdrop-blur-sm z-20 relative flex-shrink-0 gap-3">
+      <div className="flex items-center justify-between px-3 py-2 md:px-4 md:py-3 border-b border-orange-900 bg-kitchen-surface/80 backdrop-blur-sm z-20 relative flex-shrink-0 gap-2">
         <ScoreBoard />
 
-        <div className="flex flex-col items-center gap-0.5 hidden md:flex">
+        {/* Centre title — desktop only */}
+        <div className="hidden md:flex flex-col items-center gap-0.5 flex-1">
           <div className="font-display text-2xl text-orange-400 tracking-wide">
             🍳 THE CHAOS KITCHEN
           </div>
           {musicState === "loading" && (
             <div className="flex items-center gap-1.5 text-xs text-purple-400 animate-pulse">
               <span>🎵</span>
-              <span>Generating background music…</span>
+              <span>Generating music…</span>
             </div>
           )}
-          {musicState === "playing" && (
-            <div className="flex items-center gap-1.5 text-xs text-green-500 opacity-60">
-              <span>🎵</span>
-              <span>ElevenLabs music playing</span>
-            </div>
-          )}
-          {/* Victory progress indicator */}
           {endgamePending === "victory" && (
             <div className="text-xs text-yellow-400 font-semibold animate-pulse">
               🏆 VICTORY! Finishing up...
@@ -246,30 +243,37 @@ export default function GameScreen() {
           )}
           {endgamePending === "game-over" && (
             <div className="text-xs text-red-400 font-semibold animate-pulse">
-              💀 Kitchen collapsed! Finishing up...
+              💀 Finishing up...
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <AudioStatusBar />
-          {/* Victory progress */}
-          <div className="text-xs text-center hidden lg:block">
-            <div className="text-gray-400">Orders</div>
+        {/* Right section */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Orders counter — always visible on mobile */}
+          <div className="text-xs text-center">
+            <div className="text-gray-500 text-[10px] leading-none">Orders</div>
             <div
-              className={`font-display text-lg ${totalCompleted >= VICTORY_ORDERS ? "text-yellow-400" : "text-orange-300"}`}
+              className={`font-display text-base leading-none mt-0.5 ${
+                totalCompleted >= VICTORY_ORDERS
+                  ? "text-yellow-400"
+                  : "text-orange-300"
+              }`}
             >
               {totalCompleted}/{VICTORY_ORDERS}
             </div>
           </div>
-          <div className="w-44">
+          <div className="hidden sm:block">
+            <AudioStatusBar />
+          </div>
+          <div className="w-28 md:w-44">
             <ChaosBar chaosLevel={chaosLevel} />
           </div>
         </div>
       </div>
 
-      {/* ── Main layout ── */}
-      <div className="flex flex-1 gap-3 p-3 overflow-hidden min-h-0">
+      {/* ── Desktop: 3-column layout ── */}
+      <div className="hidden md:flex flex-1 gap-3 p-3 overflow-hidden min-h-0">
         <div className="w-64 flex-shrink-0 flex flex-col min-h-0">
           <OrderBoard />
         </div>
@@ -284,6 +288,93 @@ export default function GameScreen() {
             <DialogueBox />
           </div>
         </div>
+      </div>
+
+      {/* ── Mobile: single-panel tab content ── */}
+      <div className="flex md:hidden flex-1 overflow-hidden min-h-0 p-2">
+        <AnimatePresence mode="wait">
+          {mobileTab === "orders" && (
+            <motion.div
+              key="orders"
+              className="flex-1 min-h-0"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.18 }}
+            >
+              <OrderBoard />
+            </motion.div>
+          )}
+          {mobileTab === "kitchen" && (
+            <motion.div
+              key="kitchen"
+              className="flex-1 min-h-0"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ duration: 0.18 }}
+            >
+              <KitchenScene />
+            </motion.div>
+          )}
+          {mobileTab === "staff" && (
+            <motion.div
+              key="staff"
+              className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.18 }}
+            >
+              <div className="flex-1 min-h-0">
+                <StaffManager />
+              </div>
+              <div className="flex-shrink-0">
+                <DialogueBox />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Mobile: bottom tab bar ── */}
+      <div className="flex md:hidden flex-shrink-0 border-t border-orange-900 bg-kitchen-surface/95 safe-area-bottom">
+        {(
+          [
+            {
+              tab: "orders",
+              icon: "📋",
+              label: "Orders",
+              badge: orders.filter((o) => o.status === "pending").length,
+            },
+            { tab: "kitchen", icon: "🍳", label: "Kitchen", badge: 0 },
+            { tab: "staff", icon: "👥", label: "Staff", badge: 0 },
+          ] as const
+        ).map(({ tab, icon, label, badge }) => (
+          <button
+            key={tab}
+            onClick={() => setMobileTab(tab)}
+            className={`flex-1 py-3 flex flex-col items-center gap-0.5 relative transition-colors active:bg-orange-900/20 ${
+              mobileTab === tab ? "text-orange-400" : "text-gray-500"
+            }`}
+          >
+            {/* Active indicator */}
+            {mobileTab === tab && (
+              <motion.div
+                layoutId="tab-indicator"
+                className="absolute top-0 left-0 right-0 h-0.5 bg-orange-400 rounded-b"
+              />
+            )}
+            <span className="text-2xl leading-none">{icon}</span>
+            <span className="text-[10px] font-semibold">{label}</span>
+            {/* Badge for pending orders */}
+            {badge > 0 && (
+              <span className="absolute top-1.5 right-1/4 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
+                {badge}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* ── End-game pending overlay ── */}

@@ -1,4 +1,5 @@
 "use client";
+// Mobile-first responsive layout
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
@@ -107,7 +108,7 @@ export default function MainMenu() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden"
+      className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden overflow-y-auto"
       style={{
         background:
           "radial-gradient(ellipse at center, #3d1200 0%, #1a0a00 70%)",
@@ -164,12 +165,12 @@ export default function MainMenu() {
 
       {/* Title */}
       <motion.div
-        className="text-center mb-8 z-10"
+        className="text-center mb-4 md:mb-8 z-10 px-4"
         initial={{ y: -80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, type: "spring" }}
       >
-        <div className="flex justify-center gap-3 mb-2 text-5xl">
+        <div className="flex justify-center gap-2 mb-1 text-3xl md:text-5xl">
           {flames.map((f, i) => (
             <motion.span
               key={i}
@@ -183,45 +184,46 @@ export default function MainMenu() {
             </motion.span>
           ))}
         </div>
-        <h1 className="font-display text-8xl md:text-9xl text-orange-400 drop-shadow-[0_0_30px_rgba(255,107,0,0.8)]">
+
+        <h1 className="font-display text-6xl sm:text-8xl md:text-9xl text-orange-400 drop-shadow-[0_0_30px_rgba(255,107,0,0.8)] leading-none">
           THE CHAOS
         </h1>
-        <h1 className="font-display text-8xl md:text-9xl text-red-500 drop-shadow-[0_0_30px_rgba(255,26,0,0.8)] -mt-4">
+        <h1 className="font-display text-6xl sm:text-8xl md:text-9xl text-red-500 drop-shadow-[0_0_30px_rgba(255,26,0,0.8)] -mt-2 leading-none">
           KITCHEN
         </h1>
-        <p className="text-orange-200 text-xl mt-4 font-semibold">
+        <p className="text-orange-200 text-sm sm:text-xl mt-2 sm:mt-4 font-semibold">
           Your kitchen. Your useless staff. Your disaster. 🍳
         </p>
       </motion.div>
 
       {/* Main buttons */}
       <motion.div
-        className="flex flex-col gap-3 items-center z-10 w-full max-w-sm px-4"
+        className="flex flex-col gap-2 sm:gap-3 items-center z-10 w-full max-w-sm px-4"
         initial={{ y: 80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, delay: 0.3 }}
       >
         <motion.button
           onClick={handleStartGame}
-          className="w-full py-5 bg-orange-500 hover:bg-orange-400 text-white font-display text-4xl rounded-2xl pixel-border transition-colors"
+          className="w-full py-4 sm:py-5 bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white font-display text-3xl sm:text-4xl rounded-2xl pixel-border transition-colors"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
           🍳 START COOKING!
         </motion.button>
 
-        <div className="flex gap-3 w-full">
+        <div className="flex gap-2 sm:gap-3 w-full">
           <motion.button
             onClick={handleHireFriend}
-            className="flex-1 py-3 bg-purple-700 hover:bg-purple-600 text-white font-display text-2xl rounded-2xl border-2 border-purple-400 transition-colors"
+            className="flex-1 py-2.5 sm:py-3 bg-purple-700 hover:bg-purple-600 active:bg-purple-800 text-white font-display text-lg sm:text-2xl rounded-2xl border-2 border-purple-400 transition-colors"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            🎙️ HIRE A FRIEND
+            🎙️ HIRE
           </motion.button>
           <motion.button
             onClick={() => setShowHowToPlay((v) => !v)}
-            className={`flex-1 py-3 font-display text-2xl rounded-2xl border-2 transition-colors ${
+            className={`flex-1 py-2.5 sm:py-3 font-display text-lg sm:text-2xl rounded-2xl border-2 transition-colors ${
               showHowToPlay
                 ? "bg-blue-700 border-blue-400 text-white"
                 : "bg-kitchen-surface border-orange-800 text-orange-300 hover:border-orange-500"
@@ -229,7 +231,7 @@ export default function MainMenu() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            {showHowToPlay ? "✕ CLOSE" : "❓ HOW TO PLAY"}
+            {showHowToPlay ? "✕ CLOSE" : "❓ HOW TO"}
           </motion.button>
         </div>
       </motion.div>
@@ -238,18 +240,18 @@ export default function MainMenu() {
       <AnimatePresence>
         {showHowToPlay && (
           <motion.div
-            className="z-10 w-full max-w-2xl px-4 mt-4"
+            className="z-10 w-full max-w-2xl px-4 mt-2 sm:mt-4"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.35 }}
           >
-            <div className="bg-kitchen-surface/95 rounded-2xl border border-orange-900 p-5 overflow-hidden">
-              <h2 className="font-display text-3xl text-orange-300 mb-4 text-center">
+            <div className="bg-kitchen-surface/95 rounded-2xl border border-orange-900 p-3 sm:p-5 overflow-hidden max-h-[60vh] overflow-y-auto">
+              <h2 className="font-display text-2xl sm:text-3xl text-orange-300 mb-3 text-center">
                 📖 HOW TO PLAY
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-4">
                 {HOW_TO_PLAY.map((item, i) => (
                   <motion.div
                     key={i}
@@ -331,9 +333,9 @@ export default function MainMenu() {
         )}
       </AnimatePresence>
 
-      {/* Staff preview */}
+      {/* Staff preview — hidden on very small screens to save space */}
       <motion.div
-        className="flex gap-6 mt-6 z-10"
+        className="hidden sm:flex gap-4 sm:gap-6 mt-4 sm:mt-6 z-10"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
@@ -345,15 +347,15 @@ export default function MainMenu() {
         ].map((s, i) => (
           <motion.div
             key={i}
-            className="flex flex-col items-center gap-1 bg-kitchen-surface rounded-xl p-3 border border-orange-900"
+            className="flex flex-col items-center gap-1 bg-kitchen-surface rounded-xl p-2 sm:p-3 border border-orange-900"
             animate={{ y: [0, -8, 0] }}
             transition={{ duration: 2, repeat: Infinity, delay: i * 0.4 }}
           >
-            <span className="text-3xl">{s.emoji}</span>
-            <span className="font-display text-lg text-orange-300">
+            <span className="text-2xl sm:text-3xl">{s.emoji}</span>
+            <span className="font-display text-base sm:text-lg text-orange-300">
               {s.name}
             </span>
-            <span className="text-xs text-orange-200 opacity-70 text-center">
+            <span className="text-[10px] sm:text-xs text-orange-200 opacity-70 text-center">
               {s.role}
             </span>
           </motion.div>
