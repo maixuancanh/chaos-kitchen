@@ -1,137 +1,282 @@
 # 🔥 The Chaos Kitchen
 
-> Quản lý nhà bếp hỗn loạn với nhân viên AI "vô dụng" powered by ElevenLabs
+<div align="center">
 
-![Chaos Kitchen Banner](https://img.shields.io/badge/Powered%20by-ElevenLabs-orange?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0tMiAxNEg4VjhIMTB2OHptNCAwaC0yVjhoMnY4eiIvPjwvc3ZnPg==)
+**An AI-powered chaotic kitchen management game built with ElevenLabs**
 
-## 🎮 Gameplay
+[![Live Demo](https://img.shields.io/badge/🎮_Play_Now-chaos--kitchen--plum.vercel.app-orange?style=for-the-badge)](https://chaos-kitchen-plum.vercel.app)
+[![ElevenLabs](https://img.shields.io/badge/Powered_by-ElevenLabs_AI-purple?style=for-the-badge)](https://elevenlabs.io)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=for-the-badge&logo=typescript)](https://typescriptlang.org)
 
-Bạn là **Bếp Trưởng** của một nhà hàng đang bốc cháy (nghĩa bóng, nhưng đôi khi cả nghĩa đen). Ba nhân viên của bạn:
+*Your kitchen. Your useless staff. Your disaster.* 🍳
 
-| Nhân viên | Tính cách | Giọng nói |
-|-----------|-----------|-----------|
-| 👨‍🍳 **Marco** (Sous-chef) | Gắt gỏng, hay đổ lỗi | Trầm, mỉa mai |
-| 🤵 **Kevin** (Phục vụ) | Hoảng loạn, luôn xin lỗi | Cao, run rẩy |
-| 👩‍🍳 **Isabelle** (Đầu bếp bánh) | Kiêu ngạo, không nhận lỗi | Đài các, kịch tính |
+</div>
 
-**Vòng lặp chơi:**
-1. Nhận đơn hàng → chọn nhân viên → ra lệnh
-2. Nhân viên phản hồi **bằng giọng nói thật** (ElevenLabs TTS)
-3. Kết quả: Thành công 🎉 | Thất bại 💔 | Thảm họa 💥
-4. Độ hỗn loạn tăng → giọng nói trở nên bất ổn hơn
-5. Đạt 100% chaos = Game Over 💀
+---
 
-## ✨ Tính năng nổi bật
+## 🎮 What is The Chaos Kitchen?
 
-### 🎙️ Dynamic AI Voice (ElevenLabs)
-- **Text-to-Speech**: 3 nhân vật, 3 giọng nói độc đáo với `eleven_multilingual_v2`
-- **Dynamic Stability**: Chaos càng cao → `stability` parameter giảm → giọng càng bất ổn
-- **Sound Effects API**: SFX được tạo real-time từ prompt (không dùng file .mp3 có sẵn)
-  - Cháy: `"Loud kitchen fire alarm with sizzling oil sounds"`
-  - Vỡ đồ: `"Large ceramic plate smashing on a tiled floor"`
-  - Thành công: `"Ding of a service bell and cheering crowd"`
+You are the **Head Chef** of a restaurant that is slowly, inevitably, and hilariously falling apart.
 
-### 🧬 Hire Your Friend (Voice Cloning)
-Clone giọng bạn bè của bạn thành nhân viên trong bếp!
-1. Tải lên file ghi âm (~30 giây)
-2. ElevenLabs Instant Voice Cloning tạo voice ID mới
-3. Giọng bạn thân bị mắng vì làm cháy món ăn 😂
+Your three AI staff members have their own personalities, and they voice their reactions — in **real-time AI-generated speech** — every time you give them an order. The more chaotic the kitchen gets, the more unstable their voices become. At 90%+ chaos, they start arguing with each other by name.
 
-## 🚀 Cài đặt
+**Complete 15 orders to win. Hit 100% chaos and it's Game Over.**
 
-### Yêu cầu
-- Node.js 18+
-- npm hoặc yarn
-- Tài khoản ElevenLabs (lấy API key tại [elevenlabs.io](https://elevenlabs.io/app/settings/api-keys))
+---
 
-### Bước 1: Clone & cài dependencies
-```bash
-git clone <repo-url>
-cd chaos-kitchen
-npm install
-```
+## ✨ ElevenLabs Features
 
-### Bước 2: Cấu hình API Key
-```bash
-# Tạo file .env.local
-cp .env.example .env.local
+This game is built entirely around the ElevenLabs API suite. No pre-recorded audio files exist anywhere in the codebase — every sound is generated on demand.
 
-# Chỉnh sửa file và điền API key của bạn
-ELEVENLABS_API_KEY=your_api_key_here
-```
+### 🎙️ Text-to-Speech — Dynamic Staff Voices
 
-### Bước 3: Chạy development server
-```bash
-npm run dev
-```
+Each staff member has a unique voice ID and reacts to every order with contextually appropriate dialogue.
 
-Mở [http://localhost:3000](http://localhost:3000) để chơi!
+| Character | Voice | Personality |
+|-----------|-------|-------------|
+| 👨‍🍳 **Marco** (Sous-Chef) | George — deep, authoritative | Grumpy, sarcastic, always blames others |
+| 🤵 **Kevin** (Waiter) | Charlie — conversational, nervous | Panicky, clumsy, overly apologetic |
+| 👩‍🍳 **Isabelle** (Pastry Chef) | Charlotte — dramatic, British | Overconfident, theatrical, never admits mistakes |
 
-## 🏗️ Tech Stack
+**Chaos-reactive voice settings** — as kitchen chaos increases, TTS parameters shift in real time:
 
-| Layer | Công nghệ |
-|-------|-----------|
-| Frontend | Next.js 15, React 18, TypeScript |
-| Styling | Tailwind CSS, Framer Motion |
-| State | Zustand |
-| Backend | Next.js API Routes (proxy) |
-| AI Voice | ElevenLabs TTS + SFX + Voice Cloning |
+| Stress Level | Condition | `stability` | `style` | `speed` |
+|---|---|---|---|---|
+| 😊 Relaxed | chaos < 25%, < 2 orders | 0.60 | 0.35 | 0.90× |
+| 😰 Busy | chaos 25–49% | 0.48 | 0.52 | 0.97× |
+| 😤 Stressed | chaos 50–69% | 0.30 | 0.68 | 1.05× |
+| 😱 Panicking | chaos 70–89% | 0.13 | 0.82 | 1.13× |
+| 🤯 Meltdown | chaos ≥ 90% | 0.04 | 0.95 | 1.18× |
 
-## 📡 API Architecture
+At **meltdown** level, staff call each other by name and argue — Marco yells at Kevin, Kevin cries, Isabelle blames everyone.
+
+### 🔊 Sound Effects Generation — Real-time SFX
+
+Every sound effect is generated by the ElevenLabs Sound Generation API using text prompts. There are no `.mp3` files in the project.
 
 ```
-Sự kiện game → Frontend → /api/tts (proxy) → ElevenLabs → Audio Stream → Phát ngay lập tức
-                        → /api/sfx (proxy) → ElevenLabs → SFX Audio
-                        → /api/voice-clone → ElevenLabs → Voice ID mới
+Fire disaster  → "Loud kitchen fire alarm with sizzling oil sounds and crackling flames"
+Plate crash    → "Large ceramic plate smashing on a tiled floor with glass shattering"
+Order success  → "Ding of a service bell and cheerful crowd applauding"
 ```
 
-**Tại sao dùng proxy?** API Key được bảo vệ server-side, không bao giờ lộ ra client.
+**Background music** is also generated by the SFX API — a different prompt for the lobby vs. in-game:
+- Lobby: `"calm welcoming restaurant background music, soft acoustic jazz…"`
+- Game:  `"upbeat chaotic restaurant kitchen background music loop, fun jazzy rhythm…"`
 
-## 🎯 Chaos System
+The music speeds up (playback rate increases) as chaos rises, and ducks automatically when a staff member speaks (TTS ducking).
 
-| Chaos Level | Trạng thái | TTS Stability |
-|-------------|------------|---------------|
-| 0–25% | Bình thường 😊 | 0.75 |
-| 26–50% | Căng thẳng 😰 | 0.55 |
-| 51–75% | Hỗn loạn! 🔥 | 0.30 |
-| 76–100% | THẢM HỌA!!! 💀 | 0.10 |
+**End-game jingles** — unique 5-second SFX clips generated on the fly:
+- Game Over: sad trombone / defeat music
+- Victory: triumphant fanfare / celebration
 
-## 📁 Cấu trúc dự án
+### 🧬 Instant Voice Cloning — Hire a Friend
+
+Players can upload a voice recording of a friend (~30 seconds) and that friend becomes a staff member in the kitchen — reacting to disasters in their own cloned voice.
+
+1. Upload audio file (MP3, WAV, M4A)
+2. ElevenLabs IVC creates a custom voice ID
+3. The cloned voice is assigned to a new staff member
+4. Your friend's voice gets blamed for burning the food 😂
+
+### 🎤 Speech-to-Text — Voice Orders (Mobile)
+
+On the Order Board, players can tap the **🎤 Voice Order** button to speak a dish name. ElevenLabs Scribe v1 transcribes the audio and creates a custom order on the board — worth 175 bonus points.
+
+Works on:
+- iOS Safari 14.5+ (`audio/mp4`)
+- Android Chrome (`audio/webm;codecs=opus`)
+- Desktop browsers
+
+---
+
+## 🏗️ Architecture
+
+### API Proxy Pattern
+
+The ElevenLabs API key is **never exposed to the client**. All API calls go through Next.js API routes that act as a secure server-side proxy.
+
+```
+Game Event
+    │
+    ├─► POST /api/tts         → ElevenLabs /v1/text-to-speech/{voiceId}/stream
+    │         ↓ audio/mpeg binary returned to client
+    │
+    ├─► POST /api/sfx         → ElevenLabs /v1/sound-generation
+    │         ↓ audio/mpeg binary returned to client
+    │
+    ├─► POST /api/stt         → ElevenLabs /v1/speech-to-text (Scribe v1)
+    │         ↓ { text, language } returned to client
+    │
+    └─► POST /api/voice-clone → ElevenLabs /v1/voices/add (IVC)
+              ↓ { voiceId } returned to client
+```
+
+### Audio Engine
+
+A singleton `AudioManager` class manages a single shared `AudioContext` across the entire app:
+
+- **TTS channel** — awaits `source.onended` before resolving, so the game waits for the full voice line to finish before transitioning screens
+- **SFX channel** — fire-and-forget, plays simultaneously with TTS without interrupting it
+- **Background music** — separate `AudioBufferSourceNode` with `loop = true`; registered globally so `page.tsx` can stop it synchronously via `useLayoutEffect` on phase change
+- **TTS ducking** — music gain drops to 2.5% while a voice line plays, restores smoothly when done
+
+### Chaos System
+
+```
+Order completed  →  chaos −5%
+Order failed     →  chaos +10%
+Order disaster   →  chaos +25%
+Order expired    →  chaos +15%
+
+chaos ≥ 100%  →  Game Over (waits for current TTS to finish first)
+15 orders done →  Victory  (waits for current TTS to finish first)
+```
+
+---
+
+## 🗂️ Project Structure
 
 ```
 src/
 ├── app/
 │   ├── api/
-│   │   ├── tts/route.ts          # ElevenLabs TTS proxy
-│   │   ├── sfx/route.ts          # ElevenLabs SFX proxy
-│   │   └── voice-clone/route.ts  # ElevenLabs IVC proxy
+│   │   ├── tts/route.ts           # ElevenLabs TTS proxy
+│   │   ├── sfx/route.ts           # ElevenLabs SFX proxy
+│   │   ├── stt/route.ts           # ElevenLabs STT proxy (Scribe v1)
+│   │   └── voice-clone/route.ts   # ElevenLabs IVC proxy
 │   ├── layout.tsx
-│   ├── page.tsx
+│   ├── page.tsx                   # Phase router + global audio lifecycle
 │   └── globals.css
+│
 ├── components/
-│   ├── Screens/                  # MainMenu, GameScreen, GameOver, HireFriend
-│   ├── Kitchen/                  # KitchenScene, OrderBoard
-│   ├── Staff/                    # StaffCard, StaffManager
-│   ├── Effects/                  # FireEffect, ChaosOverlay
-│   └── UI/                       # ChaosBar, ScoreBoard, DialogueBox
+│   ├── Screens/
+│   │   ├── MainMenu.tsx           # Lobby + How To Play + lobby music
+│   │   ├── GameScreen.tsx         # Main game + TTS-wait end-game logic
+│   │   ├── GameOver.tsx           # Game over screen + defeat jingle
+│   │   ├── Victory.tsx            # Victory screen + fanfare jingle
+│   │   └── HireFriend.tsx         # Voice cloning UI
+│   ├── Kitchen/
+│   │   ├── KitchenScene.tsx       # Visual kitchen with animated burners
+│   │   ├── OrderBoard.tsx         # Order queue + Voice Order button
+│   │   └── VoiceOrderButton.tsx   # MediaRecorder + STT integration
+│   ├── Staff/
+│   │   ├── StaffCard.tsx          # Staff card with sound-wave animation
+│   │   └── StaffManager.tsx       # Command orchestrator + TTS pipeline
+│   ├── Effects/
+│   │   ├── FireEffect.tsx         # Animated fire overlay
+│   │   └── ChaosOverlay.tsx       # Screen vignette + crack effects
+│   └── UI/
+│       ├── ChaosBar.tsx           # Chaos level progress bar
+│       ├── ScoreBoard.tsx         # Score with floating delta animation
+│       ├── DialogueBox.tsx        # Staff dialogue log
+│       └── AudioStatusBar.tsx     # Live ElevenLabs API status indicator
+│
+├── hooks/
+│   ├── useBackgroundMusic.ts      # ElevenLabs SFX music loop + TTS ducking
+│   ├── useEndgameMusic.ts         # One-shot victory/defeat jingle
+│   └── useAmbientSound.ts         # (fallback) sine-wave ambient pad
+│
 ├── lib/
-│   ├── audio.ts                  # AudioManager (Web Audio API)
-│   ├── characters.ts             # Staff data + dialogue templates
-│   └── gameLogic.ts              # Outcome calculation, chaos math
+│   ├── audio.ts                   # AudioManager singleton
+│   ├── characters.ts              # Staff data + context-aware dialogue (5 stress levels)
+│   └── gameLogic.ts               # Stress levels, TTS settings, outcome rolling
+│
 ├── store/
-│   └── gameStore.ts              # Zustand game state
+│   └── gameStore.ts               # Zustand game state
+│
 └── types/
-    └── index.ts                  # TypeScript interfaces
+    └── index.ts                   # TypeScript interfaces
 ```
-
-## 🏆 Scoring
-
-- ✅ Hoàn thành đúng hạn: +100–200 điểm
-- 💥 Thảm họa: Điểm âm + +25% chaos
-- ❌ Thất bại thường: -20% điểm + +10% chaos
-- 🔥 Đơn hết hạn: +15% chaos
-- ⚡ Streak thưởng: Hoàn thành liên tiếp nhân hệ số
 
 ---
 
-*Built with ❤️ and 🔥 for ElevenLabs Hackathon*
+## 🚀 Running Locally
+
+### Prerequisites
+
+- Node.js 18+
+- An [ElevenLabs API key](https://elevenlabs.io/app/settings/api-keys)
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/chaos-kitchen.git
+cd chaos-kitchen
+
+# Install dependencies
+npm install --legacy-peer-deps
+
+# Configure environment
+cp .env.example .env.local
+# Edit .env.local and add your ElevenLabs API key:
+# ELEVENLABS_API_KEY=sk_...
+```
+
+### Run
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) and start cooking.
+
+---
+
+## 🌐 Deployment
+
+The game is deployed on Vercel. To deploy your own instance:
+
+```bash
+npm install -g vercel
+vercel login
+vercel --prod
+```
+
+Add `ELEVENLABS_API_KEY` in your Vercel project settings under **Settings → Environment Variables**.
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16 (App Router) |
+| Language | TypeScript 5 |
+| Styling | Tailwind CSS + Framer Motion |
+| State | Zustand |
+| Audio | Web Audio API + ElevenLabs |
+| AI Voice | ElevenLabs TTS, SFX, STT, IVC |
+| Hosting | Vercel |
+
+---
+
+## 🎯 How to Play
+
+1. **Receive orders** — dishes appear on the left panel with countdown timers
+2. **Assign staff** — click **GIVE ORDER!** on a staff member to assign the next order
+3. **Hear them react** — staff respond in real-time AI-generated voice based on the outcome
+4. **Manage chaos** — failures and expired orders raise the chaos meter
+5. **Win** — complete 15 orders before chaos hits 100%
+
+**Voice Order** (mobile/desktop): Tap 🎤 on the order board, speak a dish name, and ElevenLabs STT creates a custom order worth bonus points.
+
+**Hire a Friend**: Upload a voice recording to clone your friend's voice into the kitchen staff.
+
+---
+
+## 📄 License
+
+MIT — built for the ElevenLabs Hackathon.
+
+---
+
+<div align="center">
+
+**Built with 🔥 for the ElevenLabs Hackathon**
+
+[🎮 Play Live](https://chaos-kitchen-plum.vercel.app) · [🎙️ ElevenLabs](https://elevenlabs.io) · [📖 Docs](https://elevenlabs.io/docs)
+
+</div>
