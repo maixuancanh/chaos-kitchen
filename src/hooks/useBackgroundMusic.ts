@@ -13,8 +13,10 @@ const LOBBY_MUSIC_PROMPTS = [
   "relaxing cafe background music, smooth jazz guitar, pleasant dining ambience, soft and inviting",
 ];
 
-const NORMAL_VOLUME = 0.14;
-const DUCKED_VOLUME = 0.025;
+// Music volume is intentionally low so staff voices (TTS) are always clear.
+// DUCKED_VOLUME is near-silent — music should barely be heard when staff speak.
+const NORMAL_VOLUME = 0.07;
+const DUCKED_VOLUME = 0.004;
 
 export function useBackgroundMusic(
   chaosLevel: number,
@@ -91,7 +93,9 @@ export function useBackgroundMusic(
       ) {
         isDuckedRef.current = false;
         const t = Math.max(0, Math.min(1, chaosRef.current / 100));
-        el.volume = calm ? NORMAL_VOLUME : NORMAL_VOLUME + t * 0.12;
+        el.volume = calm
+          ? NORMAL_VOLUME
+          : Math.min(0.1, NORMAL_VOLUME + t * 0.05);
       }
     });
     return unsub;
@@ -206,8 +210,8 @@ export function useBackgroundMusic(
 
     const t = calm ? 0 : Math.max(0, Math.min(1, chaosLevel / 100));
 
-    // Volume scales with chaos
-    el.volume = NORMAL_VOLUME + t * 0.12;
+    // Volume scales with chaos — capped at 0.10 so music never drowns voices
+    el.volume = Math.min(0.1, NORMAL_VOLUME + t * 0.05);
 
     // Playback rate: music gets more frantic as chaos rises
     // HTML5 Audio supports playbackRate natively, including on iOS
