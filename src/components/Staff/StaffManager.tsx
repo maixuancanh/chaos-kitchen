@@ -72,6 +72,10 @@ export default function StaffManager() {
 
   const handleCommand = useCallback(
     async (staffId: string) => {
+      // iOS fix: prime() must be called synchronously inside the click handler
+      // so WebKit treats it as a user gesture and allows AudioContext resume.
+      audioManager.prime();
+
       if (processingIds.has(staffId)) return;
 
       // Read absolute-latest state to avoid stale closures

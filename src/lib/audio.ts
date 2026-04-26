@@ -254,6 +254,19 @@ class AudioManager {
     if (channel === "tts") this.ttsSource = source;
     else this.sfxSource = source;
 
+    // ── iOS critical fix ────────────────────────────────────────────────────
+    // The AudioContext can be suspended by iOS between the network fetch and
+    // this point (fetch takes 1–5 s; iOS kills audio after ~0.5 s of silence).
+    // We must await resume() here — NOT just fire-and-forget — so the context
+    // is guaranteed to be in "running" state before source.start(0) is called.
+    if (ctx.state === "suspended") {
+      try {
+        await ctx.resume();
+      } catch {
+        /* Safari sometimes rejects resume() outside a gesture — best effort */
+      }
+    }
+
     this.emit(channel, "playing");
 
     if (awaitEnd) {

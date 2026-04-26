@@ -142,14 +142,17 @@ export function useBackgroundMusic(
         if (!res.ok) throw new Error(`SFX API ${res.status}`);
         return res.arrayBuffer();
       })
-      .then((buffer) => {
+      .then(async (buffer) => {
         if (!buffer || !activeRef.current) return null;
         const ctx = audioManager.getSharedContext();
         if (!ctx) throw new Error("AudioContext unavailable");
-        if (ctx.state === "suspended") ctx.resume().catch(() => {});
+        // Await resume so the context is guaranteed running before decode.
+        if (ctx.state === "suspended") {
+          await ctx.resume().catch(() => {});
+        }
         return ctx.decodeAudioData(buffer.slice(0));
       })
-      .then((decoded) => {
+      .then(async (decoded) => {
         // Final activeRef check — protects against the window between fetch
         // completion and React's effect cleanup running.
         if (!decoded || !activeRef.current) return;
@@ -167,6 +170,13 @@ export function useBackgroundMusic(
 
         source.connect(gain);
         gain.connect(ctx.destination);
+
+        // iOS fix: context may have been suspended again during the 22s fetch.
+        // Await resume() before start() so the source actually plays.
+        if (ctx.state === "suspended") {
+          await ctx.resume().catch(() => {});
+        }
+
         source.start(0);
 
         // Fade in over ~2 s.
