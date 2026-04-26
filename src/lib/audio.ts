@@ -40,11 +40,31 @@ class AudioManager {
     if (!this.ctx || this.ctx.state === "closed") {
       this.ctx = new AudioContext();
     }
+
+    // ── iOS silent-buffer unlock ─────────────────────────────────────────
+    // Calling ctx.resume() alone is NOT enough on iOS Safari.
+    // The browser only permanently unlocks Web Audio when an actual
+    // AudioBufferSourceNode is started inside a synchronous user-gesture
+    // handler.  We play a 1-sample silent buffer — this is the standard
+    // technique used by Phaser, Three.js, Howler, and every other game
+    // framework that supports iOS.  Without this, source.start() called
+    // later in async code (after a network fetch) is silently ignored.
+    try {
+      const silentBuffer = this.ctx.createBuffer(1, 1, 22050);
+      const silentSource = this.ctx.createBufferSource();
+      silentSource.buffer = silentBuffer;
+      silentSource.connect(this.ctx.destination);
+      silentSource.start(0);
+    } catch {
+      /* older Safari may throw — ignore, the resume() below is the fallback */
+    }
+
     if (this.ctx.state === "suspended") {
       this.ctx
         .resume()
         .catch((e) => console.warn("[Audio] resume() failed:", e));
     }
+
     console.log(`[Audio] Context primed — state: ${this.ctx.state}`);
   }
 

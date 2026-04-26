@@ -53,17 +53,23 @@ export default function MainMenu() {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
 
+  // handleStartAudio is called by the tap-to-start overlay AND by the
+  // window event listener.  It must be a plain function (not async) so
+  // iOS WebKit treats it as a synchronous user-gesture handler.
+  const handleStartAudio = () => {
+    if (audioEnabled) return;
+    audioManager.prime(); // plays silent buffer → permanently unlocks iOS audio
+    setAudioEnabled(true);
+  };
+
   useEffect(() => {
-    const enable = () => {
-      audioManager.prime();
-      setAudioEnabled(true);
-    };
-    window.addEventListener("pointerdown", enable, { once: true });
-    window.addEventListener("keydown", enable, { once: true });
+    window.addEventListener("pointerdown", handleStartAudio, { once: true });
+    window.addEventListener("keydown", handleStartAudio, { once: true });
     return () => {
-      window.removeEventListener("pointerdown", enable);
-      window.removeEventListener("keydown", enable);
+      window.removeEventListener("pointerdown", handleStartAudio);
+      window.removeEventListener("keydown", handleStartAudio);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const musicState = useBackgroundMusic(0, audioEnabled, true);
@@ -114,6 +120,45 @@ export default function MainMenu() {
           "radial-gradient(ellipse at center, #3d1200 0%, #1a0a00 70%)",
       }}
     >
+      {/* ── Mobile tap-to-enable overlay ─────────────────────────────────────
+          On iOS Safari, Web Audio MUST be unlocked by playing a silent buffer
+          inside a synchronous touch handler. This overlay covers the whole
+          screen so the very first tap anywhere unlocks audio reliably.
+          It disappears instantly after the first touch. */}
+      {!audioEnabled && (
+        <motion.div
+          className="absolute inset-0 z-50 flex flex-col items-center justify-center cursor-pointer"
+          style={{ background: "rgba(10,3,0,0.92)" }}
+          onClick={handleStartAudio}
+          onTouchStart={handleStartAudio}
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <motion.div
+            animate={{ scale: [1, 1.08, 1], opacity: [0.8, 1, 0.8] }}
+            transition={{ duration: 1.6, repeat: Infinity }}
+            className="text-7xl mb-6"
+          >
+            🍳
+          </motion.div>
+          <div className="font-display text-4xl text-orange-400 mb-3">
+            THE CHAOS KITCHEN
+          </div>
+          <motion.div
+            animate={{ opacity: [0.6, 1, 0.6] }}
+            transition={{ duration: 1.2, repeat: Infinity }}
+            className="flex flex-col items-center gap-2"
+          >
+            <div className="text-orange-200 text-xl font-semibold">
+              👆 Tap anywhere to start
+            </div>
+            <div className="text-orange-400 text-sm opacity-70">
+              🎵 Enables audio · Powered by ElevenLabs
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
       {/* Floating bg emojis */}
       {BG_EMOJIS.map((emoji, i) => (
         <motion.div
