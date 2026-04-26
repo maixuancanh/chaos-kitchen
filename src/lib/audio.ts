@@ -18,54 +18,71 @@ export type UISoundType =
 
 type StatusListener = (event: AudioStatusEvent) => void;
 
+// ---------------------------------------------------------------------------
+// AudioManager
+//
+// AUDIO STRATEGY (revised for iOS compatibility):
+//   TTS / SFX  → HTML5 <audio> element  (most reliable on iOS Safari/Chrome)
+//   Background  → HTML5 <audio> element  with loop=true  (managed by useBackgroundMusic)
+//   UI sounds   → Web Audio oscillators  (instant, no network needed)
+//   prime()     → Web Audio silent buffer trick (permanently unlocks iOS audio)
+//
+// Why HTML5 Audio for TTS/SFX?
+//   Web Audio API on iOS requires AudioContext to be resumed inside every
+//   synchronous user-gesture handler.  Async playback after a network fetch
+//   (1-5 s later) is silently dropped.  HTML5 <audio>.play() only needs ONE
+//   user gesture ever — after that it works freely from async code.
+// ---------------------------------------------------------------------------
+
 class AudioManager {
+  // ── Web Audio context (used ONLY for prime() + UI sounds) ───────────────
   private ctx: AudioContext | null = null;
-  private ttsSource: AudioBufferSourceNode | null = null;
-  private sfxSource: AudioBufferSourceNode | null = null;
+
+  // ── HTML5 Audio elements for TTS and SFX ────────────────────────────────
+  private ttsAudio: HTMLAudioElement | null = null;
+  private sfxAudio: HTMLAudioElement | null = null;
+  private ttsBlobUrl: string | null = null;
+  private sfxBlobUrl: string | null = null;
+
+  // ── Background music registry (HTMLAudioElement set by useBackgroundMusic) ──
+  private bgAudioElement: HTMLAudioElement | null = null;
+
+  // ── Status observable ────────────────────────────────────────────────────
   private ttsStatus: AudioStatus = "idle";
   private sfxStatus: AudioStatus = "idle";
   private listeners: StatusListener[] = [];
+
   public isSpeaking = false;
 
-  // ── Background music registry ───────────────────────────────────────────
-  // useBackgroundMusic registers its source + gain here so that page.tsx can
-  // call stopBackgroundAudio() on phase change as a guaranteed nuclear stop,
-  // independent of React's effect cleanup timing.
-  private bgSource: AudioBufferSourceNode | null = null;
-  private bgGain: GainNode | null = null;
+  // ── Context lifecycle ────────────────────────────────────────────────────
 
-  // ── Context lifecycle ───────────────────────────────────────────────────
-
+  /**
+   * Call synchronously inside a user-gesture handler (button onClick / touchstart).
+   * 1. Creates the AudioContext.
+   * 2. Plays a 1-frame silent buffer — the only reliable way to permanently
+   *    unlock Web Audio on iOS Safari (used by Phaser, Howler, Three.js, etc.).
+   * 3. Resumes the context if suspended.
+   */
   prime(): void {
     if (!this.ctx || this.ctx.state === "closed") {
       this.ctx = new AudioContext();
     }
 
-    // ── iOS silent-buffer unlock ─────────────────────────────────────────
-    // Calling ctx.resume() alone is NOT enough on iOS Safari.
-    // The browser only permanently unlocks Web Audio when an actual
-    // AudioBufferSourceNode is started inside a synchronous user-gesture
-    // handler.  We play a 1-sample silent buffer — this is the standard
-    // technique used by Phaser, Three.js, Howler, and every other game
-    // framework that supports iOS.  Without this, source.start() called
-    // later in async code (after a network fetch) is silently ignored.
+    // Silent-buffer unlock — iOS requires an actual AudioBufferSourceNode
+    // to be started inside a synchronous gesture handler.
     try {
-      const silentBuffer = this.ctx.createBuffer(1, 1, 22050);
-      const silentSource = this.ctx.createBufferSource();
-      silentSource.buffer = silentBuffer;
-      silentSource.connect(this.ctx.destination);
-      silentSource.start(0);
+      const buf = this.ctx.createBuffer(1, 1, 22050);
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(this.ctx.destination);
+      src.start(0);
     } catch {
-      /* older Safari may throw — ignore, the resume() below is the fallback */
+      /* older Safari may throw — ignore */
     }
 
     if (this.ctx.state === "suspended") {
-      this.ctx
-        .resume()
-        .catch((e) => console.warn("[Audio] resume() failed:", e));
+      this.ctx.resume().catch(() => {});
     }
-
-    console.log(`[Audio] Context primed — state: ${this.ctx.state}`);
   }
 
   getContext(): AudioContext {
@@ -82,60 +99,13 @@ class AudioManager {
     return this.ctx && this.ctx.state !== "closed" ? this.ctx : null;
   }
 
-  // ── Status / listener API ───────────────────────────────────────────────
+  // ── Status observable ────────────────────────────────────────────────────
 
   onStatus(fn: StatusListener): () => void {
     this.listeners.push(fn);
     return () => {
       this.listeners = this.listeners.filter((l) => l !== fn);
     };
-  }
-
-  // ── Background music registry API ──────────────────────────────────────
-
-  /**
-   * Called by useBackgroundMusic when a looping background source starts.
-   * Overwrites any previously registered source (only one bg track at a time).
-   */
-  registerBackgroundAudio(source: AudioBufferSourceNode, gain: GainNode): void {
-    this.bgSource = source;
-    this.bgGain = gain;
-  }
-
-  /**
-   * Immediately silences and stops the registered background audio source.
-   * Called from page.tsx whenever the game phase leaves "playing" so the
-   * music stops regardless of hook cleanup timing.
-   */
-  stopBackgroundAudio(): void {
-    const ctx = this.ctx;
-    if (ctx && this.bgGain) {
-      try {
-        this.bgGain.gain.cancelScheduledValues(ctx.currentTime);
-        this.bgGain.gain.setValueAtTime(0, ctx.currentTime);
-      } catch {
-        /* ok */
-      }
-    }
-    if (this.bgSource) {
-      try {
-        this.bgSource.stop();
-      } catch {
-        /* already stopped */
-      }
-      this.bgSource = null;
-    }
-    this.bgGain = null;
-  }
-
-  /**
-   * Clears the registry without stopping (used by the hook's own cleanup
-   * so the registry doesn't hold stale refs after the hook has already
-   * stopped the source itself).
-   */
-  clearBackgroundAudioRegistry(): void {
-    this.bgSource = null;
-    this.bgGain = null;
   }
 
   private emit(channel: "tts" | "sfx", status: AudioStatus, error?: string) {
@@ -150,11 +120,7 @@ class AudioManager {
     else console.log(`[Audio][${channel}] ${status}`);
   }
 
-  // ── Instant UI sounds (zero-latency, sine waves only = no crackling) ────
-  //
-  // Rule: NEVER use setValueAtTime for gain — always use linearRamp so
-  // there is no discontinuity that causes an audible click/pop.
-  // NEVER use sawtooth/square — only sine for smooth, musical tones.
+  // ── Instant UI sounds (Web Audio oscillators — zero latency) ────────────
 
   playUISound(type: UISoundType): void {
     try {
@@ -162,7 +128,6 @@ class AudioManager {
       if (ctx.state === "suspended") ctx.resume().catch(() => {});
       const now = ctx.currentTime;
 
-      // Shared helper: schedule a smooth sine tone
       const tone = (
         freq: number,
         vol: number,
@@ -175,13 +140,10 @@ class AudioManager {
         const g = ctx.createGain();
         osc.type = "sine";
         osc.frequency.value = freq;
-
-        // Gain envelope — all ramps, never discontinuous
         g.gain.setValueAtTime(0, start);
         g.gain.linearRampToValueAtTime(vol, start + attack);
         g.gain.setValueAtTime(vol, start + attack + hold);
         g.gain.linearRampToValueAtTime(0, start + attack + hold + release);
-
         osc.connect(g);
         g.connect(ctx.destination);
         osc.start(start);
@@ -189,33 +151,24 @@ class AudioManager {
       };
 
       switch (type) {
-        // Short upward blip — button registered
         case "click":
           tone(880, 0.1, now, 0.005, 0.01, 0.07);
           break;
-
-        // Two-note thud — command issued
         case "command":
           tone(330, 0.14, now, 0.005, 0.02, 0.1);
           tone(495, 0.1, now + 0.06, 0.005, 0.01, 0.12);
           break;
-
-        // Ascending major arpeggio — cheerful success
         case "success":
           tone(523, 0.11, now, 0.005, 0.02, 0.18);
           tone(659, 0.1, now + 0.08, 0.005, 0.02, 0.18);
           tone(784, 0.1, now + 0.16, 0.005, 0.02, 0.22);
           tone(1047, 0.08, now + 0.24, 0.005, 0.03, 0.28);
           break;
-
-        // Descending minor line — failure
         case "failure":
           tone(440, 0.11, now, 0.005, 0.02, 0.14);
           tone(392, 0.1, now + 0.1, 0.005, 0.02, 0.14);
           tone(330, 0.1, now + 0.22, 0.005, 0.02, 0.22);
           break;
-
-        // Dissonant cluster — disaster (sine only, staggered = thick but not harsh)
         case "disaster":
           tone(220, 0.11, now, 0.01, 0.05, 0.4);
           tone(233, 0.09, now + 0.04, 0.01, 0.05, 0.45);
@@ -229,91 +182,11 @@ class AudioManager {
     }
   }
 
-  // ── Internal: decode + play a raw ArrayBuffer ───────────────────────────
-
-  private async decodeAndPlay(
-    arrayBuffer: ArrayBuffer,
-    opts: { channel: "tts" | "sfx"; volume?: number; awaitEnd?: boolean },
-  ): Promise<void> {
-    const { channel, volume = 1.0, awaitEnd = false } = opts;
-    const ctx = this.getContext();
-
-    let decoded: AudioBuffer;
-    try {
-      decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "decodeAudioData failed";
-      this.emit(channel, "error", msg);
-      return;
-    }
-
-    if (channel === "tts" && this.ttsSource) {
-      try {
-        this.ttsSource.stop();
-      } catch {
-        /* already stopped */
-      }
-      this.ttsSource = null;
-    }
-    if (channel === "sfx" && this.sfxSource) {
-      try {
-        this.sfxSource.stop();
-      } catch {
-        /* already stopped */
-      }
-      this.sfxSource = null;
-    }
-
-    const source = ctx.createBufferSource();
-    const gain = ctx.createGain();
-    gain.gain.value = Math.max(0, Math.min(2, volume));
-    source.buffer = decoded;
-    source.connect(gain);
-    gain.connect(ctx.destination);
-
-    if (channel === "tts") this.ttsSource = source;
-    else this.sfxSource = source;
-
-    // ── iOS critical fix ────────────────────────────────────────────────────
-    // The AudioContext can be suspended by iOS between the network fetch and
-    // this point (fetch takes 1–5 s; iOS kills audio after ~0.5 s of silence).
-    // We must await resume() here — NOT just fire-and-forget — so the context
-    // is guaranteed to be in "running" state before source.start(0) is called.
-    if (ctx.state === "suspended") {
-      try {
-        await ctx.resume();
-      } catch {
-        /* Safari sometimes rejects resume() outside a gesture — best effort */
-      }
-    }
-
-    this.emit(channel, "playing");
-
-    if (awaitEnd) {
-      await new Promise<void>((resolve) => {
-        const safetyMs = (decoded.duration + 4) * 1000;
-        const safety = setTimeout(() => {
-          console.warn(`[Audio][${channel}] onended safety timeout`);
-          resolve();
-        }, safetyMs);
-        source.onended = () => {
-          clearTimeout(safety);
-          resolve();
-        };
-        source.start(0);
-      });
-      this.emit(channel, "idle");
-      if (channel === "tts") this.ttsSource = null;
-    } else {
-      source.start(0);
-      source.onended = () => {
-        if (this.sfxSource === source) this.sfxSource = null;
-        this.emit("sfx", "idle");
-      };
-    }
-  }
-
-  // ── Public: Text-to-Speech ──────────────────────────────────────────────
+  // ── Public: Text-to-Speech (HTML5 Audio) ─────────────────────────────────
+  //
+  // Uses HTMLAudioElement instead of Web Audio API.
+  // HTML5 Audio on iOS only requires ONE user gesture ever — after that,
+  // .play() works from async code without AudioContext juggling.
 
   async playTTS(request: TTSRequest): Promise<void> {
     this.emit("tts", "loading");
@@ -338,22 +211,74 @@ class AudioManager {
 
       const buffer = await res.arrayBuffer();
       if (buffer.byteLength === 0) {
-        this.emit("tts", "error", "ElevenLabs returned empty audio buffer");
+        this.emit("tts", "error", "ElevenLabs returned empty audio");
         return;
       }
 
-      await this.decodeAndPlay(buffer, {
-        channel: "tts",
-        volume: 1.0,
-        awaitEnd: true,
+      // Stop any currently-playing TTS
+      this._stopTTSAudio();
+
+      // Create blob URL and HTMLAudioElement
+      const blob = new Blob([buffer], { type: "audio/mpeg" });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.volume = 1.0;
+
+      // iOS requires playsinline for inline audio playback in web apps
+      audio.setAttribute("playsinline", "true");
+      audio.setAttribute("webkit-playsinline", "true");
+
+      this.ttsAudio = audio;
+      this.ttsBlobUrl = url;
+      this.emit("tts", "playing");
+
+      // Await the full duration before resolving (game waits for staff to finish)
+      await new Promise<void>((resolve) => {
+        const cleanup = () => {
+          if (this.ttsBlobUrl === url) {
+            URL.revokeObjectURL(url);
+            this.ttsAudio = null;
+            this.ttsBlobUrl = null;
+          }
+          resolve();
+        };
+
+        // Safety timeout: duration + 4 s
+        const safetyMs = 14_000;
+        const safety = setTimeout(cleanup, safetyMs);
+
+        audio.addEventListener(
+          "ended",
+          () => {
+            clearTimeout(safety);
+            cleanup();
+          },
+          { once: true },
+        );
+        audio.addEventListener(
+          "error",
+          () => {
+            clearTimeout(safety);
+            cleanup();
+          },
+          { once: true },
+        );
+
+        audio.play().catch((err) => {
+          console.warn("[Audio] TTS play() rejected:", err);
+          clearTimeout(safety);
+          cleanup();
+        });
       });
+
+      this.emit("tts", "idle");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "network error";
       this.emit("tts", "error", `playTTS failed — ${msg}`);
     }
   }
 
-  // ── Public: Sound Effects ───────────────────────────────────────────────
+  // ── Public: Sound Effects (HTML5 Audio, fire-and-forget) ─────────────────
 
   async playSFX(
     eventType: "fire" | "crash" | "success" | "explosion" | "cheering",
@@ -382,14 +307,59 @@ class AudioManager {
 
       const buffer = await res.arrayBuffer();
       if (buffer.byteLength === 0) {
-        this.emit("sfx", "error", "ElevenLabs returned empty SFX buffer");
+        this.emit("sfx", "error", "ElevenLabs returned empty SFX");
         return;
       }
 
-      await this.decodeAndPlay(buffer, {
-        channel: "sfx",
-        volume: 0.55,
-        awaitEnd: false,
+      // Stop previous SFX
+      this._stopSFXAudio();
+
+      const blob = new Blob([buffer], { type: "audio/mpeg" });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.volume = 0.55;
+      audio.setAttribute("playsinline", "true");
+      audio.setAttribute("webkit-playsinline", "true");
+
+      this.sfxAudio = audio;
+      this.sfxBlobUrl = url;
+      this.emit("sfx", "playing");
+
+      // Fire-and-forget — cleans up when done
+      audio.addEventListener(
+        "ended",
+        () => {
+          URL.revokeObjectURL(url);
+          if (this.sfxAudio === audio) {
+            this.sfxAudio = null;
+            this.sfxBlobUrl = null;
+          }
+          this.emit("sfx", "idle");
+        },
+        { once: true },
+      );
+
+      audio.addEventListener(
+        "error",
+        () => {
+          URL.revokeObjectURL(url);
+          if (this.sfxAudio === audio) {
+            this.sfxAudio = null;
+            this.sfxBlobUrl = null;
+          }
+          this.emit("sfx", "idle");
+        },
+        { once: true },
+      );
+
+      audio.play().catch((err) => {
+        console.warn("[Audio] SFX play() rejected:", err);
+        URL.revokeObjectURL(url);
+        if (this.sfxAudio === audio) {
+          this.sfxAudio = null;
+          this.sfxBlobUrl = null;
+        }
+        this.emit("sfx", "idle");
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "network error";
@@ -397,14 +367,45 @@ class AudioManager {
     }
   }
 
-  // ── Public: API Health Check ────────────────────────────────────────────
+  // ── Background music registry (used by useBackgroundMusic) ───────────────
+
+  /**
+   * Register an HTMLAudioElement as the current background music track.
+   * page.tsx calls stopBackgroundAudio() on phase change to stop it.
+   */
+  setBackgroundAudioElement(el: HTMLAudioElement | null): void {
+    this.bgAudioElement = el;
+  }
+
+  // Legacy Web Audio registry (kept for backward compat, no-op now)
+  registerBackgroundAudio(
+    _source: AudioBufferSourceNode,
+    _gain: GainNode,
+  ): void {}
+  clearBackgroundAudioRegistry(): void {}
+
+  stopBackgroundAudio(): void {
+    // Stop HTML5 audio element (primary)
+    if (this.bgAudioElement) {
+      try {
+        this.bgAudioElement.pause();
+        this.bgAudioElement.src = "";
+      } catch {
+        /* ok */
+      }
+      this.bgAudioElement = null;
+    }
+    console.log("[Audio] Background audio stopped");
+  }
+
+  // ── API Health Check ──────────────────────────────────────────────────────
 
   async checkAPIHealth(): Promise<{
     tts: boolean;
     sfx: boolean;
     error?: string;
   }> {
-    console.log("[Audio] Running API health check...");
+    console.log("[Audio] Running API health check…");
     let ttsOk = false;
     try {
       const res = await fetch("/api/tts", {
@@ -420,12 +421,16 @@ class AudioManager {
       if (res.ok) {
         const buf = await res.arrayBuffer();
         ttsOk = buf.byteLength > 0;
-        if (ttsOk)
-          await this.decodeAndPlay(buf, {
-            channel: "tts",
-            volume: 0.8,
-            awaitEnd: true,
-          });
+        if (ttsOk) {
+          // Play test audio
+          const blob = new Blob([buf], { type: "audio/mpeg" });
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          audio.volume = 0.8;
+          audio.setAttribute("playsinline", "true");
+          await audio.play().catch(() => {});
+          URL.revokeObjectURL(url);
+        }
       } else {
         console.error("[Audio] TTS health check failed:", await res.text());
       }
@@ -446,12 +451,15 @@ class AudioManager {
       if (res.ok) {
         const buf = await res.arrayBuffer();
         sfxOk = buf.byteLength > 0;
-        if (sfxOk)
-          await this.decodeAndPlay(buf, {
-            channel: "sfx",
-            volume: 0.5,
-            awaitEnd: false,
-          });
+        if (sfxOk) {
+          const blob = new Blob([buf], { type: "audio/mpeg" });
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          audio.volume = 0.5;
+          audio.setAttribute("playsinline", "true");
+          audio.play().catch(() => {});
+          URL.revokeObjectURL(url);
+        }
       } else {
         console.error("[Audio] SFX health check failed:", await res.text());
       }
@@ -459,7 +467,6 @@ class AudioManager {
       console.error("[Audio] SFX health check threw:", err);
     }
 
-    console.log(`[Audio] Health check — TTS: ${ttsOk}, SFX: ${sfxOk}`);
     return {
       tts: ttsOk,
       sfx: sfxOk,
@@ -474,30 +481,48 @@ class AudioManager {
     };
   }
 
-  // ── Utilities ───────────────────────────────────────────────────────────
+  // ── Internal helpers ──────────────────────────────────────────────────────
+
+  private _stopTTSAudio(): void {
+    if (this.ttsAudio) {
+      try {
+        this.ttsAudio.pause();
+      } catch {
+        /* ok */
+      }
+      this.ttsAudio = null;
+    }
+    if (this.ttsBlobUrl) {
+      URL.revokeObjectURL(this.ttsBlobUrl);
+      this.ttsBlobUrl = null;
+    }
+  }
+
+  private _stopSFXAudio(): void {
+    if (this.sfxAudio) {
+      try {
+        this.sfxAudio.pause();
+      } catch {
+        /* ok */
+      }
+      this.sfxAudio = null;
+    }
+    if (this.sfxBlobUrl) {
+      URL.revokeObjectURL(this.sfxBlobUrl);
+      this.sfxBlobUrl = null;
+    }
+  }
+
+  // ── Public utilities ──────────────────────────────────────────────────────
 
   stopTTS(): void {
-    if (this.ttsSource) {
-      try {
-        this.ttsSource.stop();
-      } catch {
-        /* already stopped */
-      }
-      this.ttsSource = null;
-    }
+    this._stopTTSAudio();
     this.isSpeaking = false;
     this.emit("tts", "idle");
   }
 
   stopSFX(): void {
-    if (this.sfxSource) {
-      try {
-        this.sfxSource.stop();
-      } catch {
-        /* already stopped */
-      }
-      this.sfxSource = null;
-    }
+    this._stopSFXAudio();
     this.emit("sfx", "idle");
   }
 
@@ -514,4 +539,5 @@ class AudioManager {
   }
 }
 
+// Singleton — one instance for the entire app
 export const audioManager = new AudioManager();

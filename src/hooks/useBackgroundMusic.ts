@@ -23,100 +23,91 @@ export function useBackgroundMusic(
 ): MusicState {
   const [state, setState] = useState<MusicState>("idle");
 
-  // ── Refs ────────────────────────────────────────────────────────────────
-  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const gainRef = useRef<GainNode | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
   const loadingRef = useRef(false);
   const isDuckedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  // activeRef is updated SYNCHRONOUSLY in the render body (not in a useEffect)
-  // so it is always current before any async .then() callbacks execute.
+  // Sync activeRef and chaosRef in the render body so async callbacks
+  // always see the latest value without relying on stale closures.
   const activeRef = useRef(isActive);
   activeRef.current = isActive;
 
-  // chaosRef is also kept current in the render body for the same reason.
   const chaosRef = useRef(chaosLevel);
   chaosRef.current = chaosLevel;
 
-  // ── Internal stop helper ─────────────────────────────────────────────────
-  // Cancels any in-flight fetch, silences the gain, stops the source node,
-  // and clears every ref. Safe to call multiple times (all try/catch guarded).
+  // ── Cleanup helper ──────────────────────────────────────────────────────
+
   const stopEverything = () => {
-    // 1. Cancel any fetch that hasn't completed yet.
+    // Cancel any in-flight fetch
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
     }
 
-    // 2. Immediately silence the gain node (avoids a hard click on stop).
-    const ctx = audioManager.getSharedContext();
-    const gain = gainRef.current;
-    if (ctx && gain) {
+    // Pause and destroy the HTML audio element
+    const el = audioElRef.current;
+    if (el) {
       try {
-        gain.gain.cancelScheduledValues(ctx.currentTime);
-        gain.gain.setValueAtTime(0, ctx.currentTime);
+        el.pause();
+        el.src = "";
+        el.load(); // force release on iOS
       } catch {
         /* ok */
       }
+      audioElRef.current = null;
     }
 
-    // 3. Stop the source node.
-    if (sourceRef.current) {
-      try {
-        sourceRef.current.stop();
-      } catch {
-        /* already stopped — fine */
-      }
-      sourceRef.current = null;
+    // Revoke the blob URL
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
     }
 
-    // 4. Clear remaining refs.
-    gainRef.current = null;
     loadingRef.current = false;
     isDuckedRef.current = false;
 
-    // 5. Clear the global registry in audioManager.
-    audioManager.clearBackgroundAudioRegistry();
+    // Deregister from audioManager so page.tsx can't double-stop
+    audioManager.setBackgroundAudioElement(null);
   };
 
-  // ── TTS ducking ──────────────────────────────────────────────────────────
+  // ── TTS ducking ─────────────────────────────────────────────────────────
+  // When ElevenLabs TTS starts speaking, quietly lower the music so the
+  // voice is clearly audible.  Restore when TTS goes idle/error.
+
   useEffect(() => {
     const unsub = audioManager.onStatus((event) => {
       if (event.channel !== "tts") return;
-      const ctx = audioManager.getSharedContext();
-      const gain = gainRef.current;
-      if (!ctx || !gain) return;
+      const el = audioElRef.current;
+      if (!el) return;
 
-      const now = ctx.currentTime;
       if (event.status === "playing" && !isDuckedRef.current) {
         isDuckedRef.current = true;
-        gain.gain.setTargetAtTime(DUCKED_VOLUME, now, 0.1);
+        el.volume = DUCKED_VOLUME;
       } else if (
         (event.status === "idle" || event.status === "error") &&
         isDuckedRef.current
       ) {
         isDuckedRef.current = false;
         const t = Math.max(0, Math.min(1, chaosRef.current / 100));
-        const target = calm ? NORMAL_VOLUME : NORMAL_VOLUME + t * 0.12;
-        gain.gain.setTargetAtTime(target, now, 0.2);
+        el.volume = calm ? NORMAL_VOLUME : NORMAL_VOLUME + t * 0.12;
       }
     });
     return unsub;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load / unload ────────────────────────────────────────────────────────
+
   useEffect(() => {
-    // ── DEACTIVATE path ───────────────────────────────────────────────────
     if (!isActive) {
       stopEverything();
       setState("idle");
       return;
     }
 
-    // ── ACTIVATE path ─────────────────────────────────────────────────────
-    // Guard: don't start a second load if one is already running.
-    if (loadingRef.current || sourceRef.current) return;
+    // Guard: don't start a second load if one is already in flight
+    if (loadingRef.current || audioElRef.current) return;
 
     loadingRef.current = true;
     setState("loading");
@@ -137,94 +128,90 @@ export function useBackgroundMusic(
       signal: controller.signal,
     })
       .then((res) => {
-        // Check activeRef (updated synchronously in render) before proceeding.
         if (!activeRef.current) return null;
         if (!res.ok) throw new Error(`SFX API ${res.status}`);
         return res.arrayBuffer();
       })
-      .then(async (buffer) => {
-        if (!buffer || !activeRef.current) return null;
-        const ctx = audioManager.getSharedContext();
-        if (!ctx) throw new Error("AudioContext unavailable");
-        // Await resume so the context is guaranteed running before decode.
-        if (ctx.state === "suspended") {
-          await ctx.resume().catch(() => {});
-        }
-        return ctx.decodeAudioData(buffer.slice(0));
-      })
-      .then(async (decoded) => {
-        // Final activeRef check — protects against the window between fetch
-        // completion and React's effect cleanup running.
-        if (!decoded || !activeRef.current) return;
+      .then((buffer) => {
+        if (!buffer || !activeRef.current) return;
 
-        const ctx = audioManager.getSharedContext();
-        if (!ctx) return;
+        // Build a Blob URL from the MP3 binary
+        const blob = new Blob([buffer], { type: "audio/mpeg" });
+        const url = URL.createObjectURL(blob);
+        blobUrlRef.current = url;
 
-        const source = ctx.createBufferSource();
-        const gain = ctx.createGain();
+        // Create the HTML5 Audio element
+        const audio = new Audio(url);
 
-        source.buffer = decoded;
-        source.loop = true;
-        source.playbackRate.value = 1.0;
-        gain.gain.value = 0; // start silent, fade in below
+        // Required for inline playback inside iOS web apps / PWAs
+        audio.setAttribute("playsinline", "true");
+        audio.setAttribute("webkit-playsinline", "true");
+        audio.setAttribute("x-webkit-airplay", "deny");
 
-        source.connect(gain);
-        gain.connect(ctx.destination);
+        audio.loop = true; // seamless loop — no Web Audio needed
+        audio.volume = 0; // start silent, ramp below
+        audio.preload = "auto";
 
-        // iOS fix: context may have been suspended again during the 22s fetch.
-        // Await resume() before start() so the source actually plays.
-        if (ctx.state === "suspended") {
-          await ctx.resume().catch(() => {});
-        }
+        // Register with audioManager so page.tsx can stop it via
+        // stopBackgroundAudio() during phase transitions.
+        audioElRef.current = audio;
+        audioManager.setBackgroundAudioElement(audio);
 
-        source.start(0);
+        // play() returns a Promise — on iOS this resolves only if the
+        // AudioContext was already unlocked by a prior user gesture.
+        return audio.play().then(() => {
+          if (!activeRef.current) {
+            audio.pause();
+            return;
+          }
 
-        // Fade in over ~2 s.
-        gain.gain.setTargetAtTime(NORMAL_VOLUME, ctx.currentTime, 0.7);
+          // Fade volume in gradually so the music doesn't pop on start
+          let vol = 0;
+          const targetVol = NORMAL_VOLUME;
+          const step = targetVol / 40; // 40 steps × 50 ms = 2 s fade-in
+          const fadeIn = setInterval(() => {
+            if (!audioElRef.current || audioElRef.current !== audio) {
+              clearInterval(fadeIn);
+              return;
+            }
+            vol = Math.min(targetVol, vol + step);
+            audio.volume = isDuckedRef.current ? DUCKED_VOLUME : vol;
+            if (vol >= targetVol) clearInterval(fadeIn);
+          }, 50);
 
-        sourceRef.current = source;
-        gainRef.current = gain;
-        abortRef.current = null;
-
-        // Register with audioManager so page.tsx can also stop it directly.
-        audioManager.registerBackgroundAudio(source, gain);
-
-        setState("playing");
-        console.log("[Music] ElevenLabs background music started 🎵");
+          setState("playing");
+          console.log("[Music] ElevenLabs background music playing 🎵");
+        });
       })
       .catch((err: unknown) => {
-        // AbortError is expected when we cancel — not an error worth logging.
         if (err instanceof Error && err.name === "AbortError") return;
-        console.error("[Music] Failed to load:", err);
+        console.error("[Music] Failed to load background music:", err);
         setState("error");
       })
       .finally(() => {
         loadingRef.current = false;
+        abortRef.current = null;
       });
 
-    // ── Cleanup ───────────────────────────────────────────────────────────
-    // Runs when isActive flips false OR when the component unmounts.
-    // stopEverything() cancels the fetch (AbortController) and stops the
-    // source node immediately — no delays.
     return () => {
       stopEverything();
     };
   }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Chaos reactivity ─────────────────────────────────────────────────────
+
   useEffect(() => {
-    const ctx = audioManager.getSharedContext();
-    const gain = gainRef.current;
-    if (!ctx || !gain || isDuckedRef.current) return;
+    const el = audioElRef.current;
+    if (!el || isDuckedRef.current) return;
 
     const t = calm ? 0 : Math.max(0, Math.min(1, chaosLevel / 100));
-    const now = ctx.currentTime;
 
-    gain.gain.setTargetAtTime(NORMAL_VOLUME + t * 0.12, now, 1.2);
+    // Volume scales with chaos
+    el.volume = NORMAL_VOLUME + t * 0.12;
 
-    if (sourceRef.current) {
-      sourceRef.current.playbackRate.setTargetAtTime(1.0 + t * 0.28, now, 1.5);
-    }
+    // Playback rate: music gets more frantic as chaos rises
+    // HTML5 Audio supports playbackRate natively, including on iOS
+    el.playbackRate = 1.0 + t * 0.28;
   }, [chaosLevel, calm]);
 
   return state;
